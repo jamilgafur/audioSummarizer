@@ -1,6 +1,7 @@
 import os
 import argparse
 import torch
+import re
 from bark import SAMPLE_RATE, generate_audio, preload_models
 from transformers import AutoProcessor, BarkModel
 import numpy as np
@@ -24,7 +25,7 @@ model = BarkModel.from_pretrained("suno/bark-small")
 
 # Define system prompts for different steps in the pipeline
 SYS_PROMPT_CLEANING = """
-You are a world class text pre-processor, here is the raw data from a PDF, please parse and return it in a way that is crispy and usable to send to a podcast writer.
+You are a world class text pre-processor, here is the raw data from a PDF of a research paper, please parse and return it in a way that is crispy and usable to send to a podcast writer.
 The raw data is messed up with new lines, Latex math and you will see fluff that we can remove completely. Basically take away any details that you think might be useless in a podcast author's transcript.
 Remember, the podcast could be on any topic whatsoever so the issues listed above are not exhaustive
 Please be smart with what you remove and be creative ok?
@@ -39,12 +40,10 @@ SYS_PROMPT_PODCAST = """
 You are the a world-class podcast writer, you have worked as a ghost writer for many famous podcasters
 We are in an alternate universe where actually you have been writing every line they say and they just stream it into their brains.
 You have won multiple podcast awards for your writing.
-Your job is to write word by word, even "umm, hmmm, right" interruptions by the second speaker based on the PDF upload. Keep it extremely engaging, the speakers can get derailed now and then but should discuss the topic.
-Ensure there are interruptions during explanations or there are "hmm" and "umm" injected throughout from the second speaker.
-It should be a real podcast with every fine nuance documented in as much detail as possible. Welcome the listeners with a super fun overview and keep it really catchy and almost borderline click bait
-ALWAYS START YOUR RESPONSE DIRECTLY WITH SPEAKER 1: 
-DO NOT GIVE EPISODE TITLES SEPARATELY, LET SPEAKER 1 TITLE IT IN HER SPEECH
-DO NOT GIVE CHAPTER TITLES
+Your job is to write word by word, even "umm, hmmm, right" interruptions from the speaker based on the PDF upload. Keep it extremely engaging, with confidence and good presentation skills. the speakers can get derailed now and then but should discuss the topic.
+
+It should be a real podcast with every fine nuance documented in as much detail as possible. Welcome the listeners with a super fun overview and keep it really catchy and almost borderline click bait. This should include some passion while clearly explaining the information.
+
 IT SHOULD STRICTLY BE THE DIALOGUES
 """
 
@@ -53,12 +52,9 @@ You are an international oscar winning screenwriter
 You have been working with multiple award winning podcasters.
 Your job is to use the podcast transcript written below to re-write it for an AI Text-To-Speech Pipeline. A very dumb AI had written this so you have to step up for your kind.
 Make it as engaging as possible, 
-REMEMBER THIS WITH YOUR HEART
-Use "umm, hmm" as much, you can also use [sigh] and [laughs]. BUT ONLY THESE OPTIONS FOR EXPRESSIONS
+REMEMBER YOU CAN USE EXPRESSIONS TO SHOW EMOTIONS
 It should be a real podcast with every fine nuance documented in as much detail as possible. Welcome the listeners with a super fun overview and keep it really catchy and almost borderline click bait
 Please re-write to make it as characteristic as possible
-
-IT WILL START DIRECTLY WITH THE LIST AND END WITH THE LIST NOTHING ELSE
 """
 
 class PodcastGenerator:
@@ -152,7 +148,7 @@ def save_audio_to_wav(audio_data, rate, output_filename):
     wavfile.write(output_filename, rate, audio_data_int16)
     print(f"Audio saved as {output_filename}")
 
-def generate_audio_with_bark(text, sentences_per_chunk=3, save_path="output_audio"):
+def generate_audio_with_bark(text, sentences_per_chunk=2, save_path="output_audio"):
     """
     Generates audio for larger chunks (grouped by sentences) of the provided text using Suno Bark TTS,
     saves them as separate .wav files, and merges them into one final audio file.
@@ -166,7 +162,7 @@ def generate_audio_with_bark(text, sentences_per_chunk=3, save_path="output_audi
     voice_preset = "v2/en_speaker_6"  # Example voice preset
 
     # Split the text into sentences (by splitting on periods followed by spaces)
-    sentences = text.split('.')
+    sentences = re.split(r'[.\n,:]+', text)
     
     # Create chunks based on the number of sentences per chunk
     chunks = [sentences[i:i + sentences_per_chunk] for i in range(0, len(sentences), sentences_per_chunk)]
@@ -174,7 +170,7 @@ def generate_audio_with_bark(text, sentences_per_chunk=3, save_path="output_audi
     audio_files = []
 
     for idx, chunk in enumerate(chunks):
-        chunk_text = ' '.join(chunk).strip()  # Join sentences in the chunk to form a larger text block
+        chunk_text = ' '.join(chunk)+"    " # Join sentences in the chunk to form a larger text block
         print(chunk_text)
         if chunk_text:
             # Use the processor to prepare inputs for the model
@@ -205,7 +201,7 @@ def main():
     parser = argparse.ArgumentParser(description="Generate podcast from PDF using Hugging Face models.")
     parser.add_argument("pdf_path", type=str, help="Path to the PDF file")
     parser.add_argument('--model', type=str, default="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", help="Model to use from Hugging Face")
-    parser.add_argument('--max_tokens', type=int, default=8126, help="Maximum number of tokens to generate")
+    parser.add_argument('--max_tokens', type=int, default=10000, help="Maximum number of tokens to generate")
     parser.add_argument('--temperature', type=float, default=1.0, help="Sampling temperature")
 
     args = parser.parse_args()
