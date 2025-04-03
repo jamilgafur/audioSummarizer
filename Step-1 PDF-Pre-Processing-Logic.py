@@ -65,7 +65,7 @@ def process_text_chunk(model, tokenizer, text_chunk, sys_prompt, device):
     
     prompt = tokenizer.apply_chat_template(conversation, tokenize=False)
     inputs = tokenizer(prompt, return_tensors="pt").to(device)
-    
+    model = model.to("cuda")
     with torch.no_grad():
         output = model.generate(**inputs, temperature=0.7, top_p=0.9, max_new_tokens=512)
     

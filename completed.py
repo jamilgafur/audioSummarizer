@@ -1,18 +1,26 @@
 import os
 import argparse
 import torch
+from bark import SAMPLE_RATE, generate_audio, preload_models
+from transformers import AutoProcessor, BarkModel
+import numpy as np
+from scipy.io.wavfile import write as write_wav
+from pydub import AudioSegment
 import pdfplumber
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 import pickle
-import warnings
-from parler_tts import ParlerTTSForConditionalGeneration, ParlerTTSStreamer
+from scipy.io.wavfile import write as write_wav
 from pydub import AudioSegment
-import io
 import numpy as np
 from scipy.io import wavfile
+import warnings
+import gc
+from transformers import AutoProcessor, AutoModelForTextToWaveform
 
 warnings.filterwarnings('ignore')
+processor = AutoProcessor.from_pretrained("suno/bark-small")
+model = BarkModel.from_pretrained("suno/bark-small")
 
 # Define system prompts for different steps in the pipeline
 SYS_PROMPT_CLEANING = """
@@ -84,73 +92,59 @@ class PodcastGenerator:
                     total_chars += len(text)
         return '\n'.join(extracted_text)
 
-    def clean_text(self, text, sys_prompt):
-        conversation = [
-            {"role": "system", "content": sys_prompt},
-            {"role": "user", "content": text},
-        ]
+    def clean_text(self, text, sys_prompt, save_path="cleaned_text.txt"):
+        # Check if file exists
+        if os.path.exists(save_path):
+            with open(save_path, "r") as file:
+                cleaned_text = file.read()
+            print(f"Loaded cleaned text from {save_path}.")
+        else:
+            conversation = [
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": text},
+            ]
+            
+            conversation_text = "\n".join([msg["content"] for msg in conversation])
+            
+            inputs = self.pipeline.tokenizer(conversation_text, return_tensors="pt").to(self.pipeline.device)
+            max_token_length = self.pipeline.model.config.max_position_embeddings
+            
+            # Ensure the token length does not exceed the model's maximum length
+            if inputs.input_ids.shape[1] > max_token_length:
+                inputs = {key: value[:, :max_token_length] for key, value in inputs.items()}
+            
+            with torch.no_grad():
+                output = self.pipeline.model.generate(**inputs, temperature=self.temperature, top_p=0.9, max_new_tokens=512)
+            
+            cleaned_text = self.pipeline.tokenizer.decode(output[0], skip_special_tokens=True)[len(inputs['input_ids']):].strip()
+            
+            # Save cleaned text
+            with open(save_path, "w") as file:
+                file.write(cleaned_text)
+            print(f"Saved cleaned text to {save_path}.")
         
-        conversation_text = "\n".join([msg["content"] for msg in conversation])
+        return cleaned_text
+
+    def generate_script(self, input_text, sys_prompt, save_path="podcast_script.txt"):
+        # Check if file exists
+        if os.path.exists(save_path):
+            with open(save_path, "r") as file:
+                podcast_script = file.read()
+            print(f"Loaded podcast script from {save_path}.")
+        else:
+            messages = [
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": input_text},
+            ]
+            outputs = self.pipeline(messages, max_new_tokens=self.max_tokens, temperature=self.temperature)
+            podcast_script = outputs[0]["generated_text"][-1]['content']
+            
+            # Save podcast script
+            with open(save_path, "w") as file:
+                file.write(podcast_script)
+            print(f"Saved podcast script to {save_path}.")
         
-        inputs = self.pipeline.tokenizer(conversation_text, return_tensors="pt").to(self.pipeline.device)
-        max_token_length = self.pipeline.model.config.max_position_embeddings
-        
-        # Ensure the token length does not exceed the model's maximum length
-        if inputs.input_ids.shape[1] > max_token_length:
-            inputs = {key: value[:, :max_token_length] for key, value in inputs.items()}
-        
-        with torch.no_grad():
-            output = self.pipeline.model.generate(**inputs, temperature=self.temperature, top_p=0.9, max_new_tokens=512)
-        
-        return self.pipeline.tokenizer.decode(output[0], skip_special_tokens=True)[len(inputs['input_ids']):].strip()
-
-    def generate_script(self, input_text, sys_prompt):
-        messages = [
-            {"role": "system", "content": sys_prompt},
-            {"role": "user", "content": input_text},
-        ]
-        outputs = self.pipeline(messages, max_new_tokens=self.max_tokens, temperature=self.temperature)
-        return outputs[0]["generated_text"][-1]['content']
-
-    def generate_audio(self, text, model, tokenizer):
-        input_ids = tokenizer(text, return_tensors="pt").input_ids.to(self.pipeline.device)
-        generation = model.generate(input_ids=input_ids)
-        audio_arr = generation.cpu().numpy().squeeze()
-        return audio_arr, model.config.sampling_rate
-
-
-
-def setup_parler_tts():
-    model_name = "parler-tts/parler-tts-mini-v1"
-    torch_device = "cuda:0"  # or "mps" for Mac
-    torch_dtype = torch.bfloat16
-    model = ParlerTTSForConditionalGeneration.from_pretrained(
-        model_name,
-        attn_implementation="eager"
-    ).to(torch_device, dtype=torch_dtype)
-    compile_mode = "default"
-    model.generation_config.cache_implementation = "static"
-    model.forward = torch.compile(model.forward, mode=compile_mode)
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    return model, tokenizer
-
-
-def numpy_to_audio_segment(audio_data, rate):
-    device = "cpu"
-    if isinstance(audio_data, torch.Tensor):
-        audio_data = audio_data.to(device)
-    
-    audio_arr = audio_data.cpu().numpy() if isinstance(audio_data, torch.Tensor) else np.array(audio_data, dtype=np.float32)
-    audio_arr = np.interp(audio_arr, (audio_arr.min(), audio_arr.max()), (-1, 1))
-    
-    audio_segment = AudioSegment(
-        audio_arr.tobytes(),
-        frame_rate=rate,
-        sample_width=audio_arr.itemsize,
-        channels=1
-    )
-    return audio_segment
-
+        return podcast_script
 
 def save_audio_to_wav(audio_data, rate, output_filename):
     audio_data = np.clip(audio_data, -1, 1)
@@ -158,61 +152,54 @@ def save_audio_to_wav(audio_data, rate, output_filename):
     wavfile.write(output_filename, rate, audio_data_int16)
     print(f"Audio saved as {output_filename}")
 
+def generate_audio_with_bark(text, sentences_per_chunk=3, save_path="output_audio"):
+    """
+    Generates audio for larger chunks (grouped by sentences) of the provided text using Suno Bark TTS,
+    saves them as separate .wav files, and merges them into one final audio file.
 
-import torch
-from parler_tts import ParlerTTSForConditionalGeneration, ParlerTTSStreamer
-from transformers import AutoTokenizer
-from threading import Thread
+    Args:
+    - text (str): The text to generate audio from.
+    - sentences_per_chunk (int): The number of sentences in each chunk. Defaults to 5.
+    - save_path (str): The path to save the final generated audio file.
+    """
+    # Voice preset (you can modify this for different voices)
+    voice_preset = "v2/en_speaker_6"  # Example voice preset
 
-def generate_with_streaming(text, description, model, tokenizer, chunk_size_in_s=0.5, save_path=""):
-    frame_rate = model.audio_encoder.config.frame_rate
-    sampling_rate = model.audio_encoder.config.sampling_rate
+    # Split the text into sentences (by splitting on periods followed by spaces)
+    sentences = text.split('.')
     
-    # Create the streamer
-    play_steps = int(frame_rate * chunk_size_in_s)
-    streamer = ParlerTTSStreamer(model, device="cuda:0", play_steps=play_steps)
+    # Create chunks based on the number of sentences per chunk
+    chunks = [sentences[i:i + sentences_per_chunk] for i in range(0, len(sentences), sentences_per_chunk)]
 
-    # Tokenize inputs
-    inputs = tokenizer(description, return_tensors="pt").to("cuda:0")
-    prompt = tokenizer(text, return_tensors="pt").to("cuda:0")
+    audio_files = []
 
-    # Set up the generation arguments
-    generation_kwargs = dict(
-        input_ids=inputs.input_ids,
-        prompt_input_ids=prompt.input_ids,
-        attention_mask=inputs.attention_mask,
-        prompt_attention_mask=prompt.attention_mask,
-        streamer=streamer,
-        do_sample=True,
-        temperature=1.0,
-        min_new_tokens=10,
-    )
-    
-    # Function to handle the generation in a separate thread
-    def generate_audio():
-        thread = Thread(target=model.generate, kwargs=generation_kwargs)
-        thread.start()
-        thread.join()  # Wait for the thread to finish
+    for idx, chunk in enumerate(chunks):
+        chunk_text = ' '.join(chunk).strip()  # Join sentences in the chunk to form a larger text block
+        print(chunk_text)
+        if chunk_text:
+            # Use the processor to prepare inputs for the model
+            inputs = processor(chunk_text, voice_preset=voice_preset)
 
-    # Start the generation thread
-    generate_audio()
+            # Generate audio using the Bark model
+            audio_array = model.generate(**inputs)
+            audio_array = audio_array.cpu().numpy().squeeze()
 
-    # Iterate over chunks of audio
-    audio_data_all = []
-    for new_audio in streamer:
-        if new_audio.shape[0] == 0:
-            break
-        print(f"Sample of length: {round(new_audio.shape[0] / sampling_rate, 4)} seconds")
-        audio_data_all.append(new_audio)
+            # Save audio to a temporary file for this chunk
+            chunk_filename = f"{save_path}_chunk_{idx + 1}.wav"
+            write_wav(chunk_filename, 22050, audio_array)  # Assuming Bark uses 22050 Hz sample rate
+            audio_files.append(chunk_filename)
+            print(f"Generated audio for chunk {idx + 1}: {chunk_filename}")
 
-    # Concatenate all audio chunks and save to a file
-    if audio_data_all:
-        audio_data_all = np.concatenate(audio_data_all, axis=0)
-        audio_filename = f"{save_path}_podcast.wav"
-        save_audio_to_wav(audio_data_all, sampling_rate, audio_filename)
-    
+    # Merge the generated audio files into one large file
+    merged_audio = AudioSegment.empty()  # Start with an empty audio segment
+    for audio_file in audio_files:
+        chunk_audio = AudioSegment.from_wav(audio_file)
+        merged_audio += chunk_audio  # Append each chunk's audio
 
-
+    # Save the final merged audio file
+    merged_filename = f"{save_path}_merged_podcast.wav"
+    merged_audio.export(merged_filename, format="wav")
+    print(f"Final merged audio saved as {merged_filename}")
 
 def main():
     parser = argparse.ArgumentParser(description="Generate podcast from PDF using Hugging Face models.")
@@ -225,24 +212,49 @@ def main():
 
     generator = PodcastGenerator(model_name=args.model, max_tokens=args.max_tokens, temperature=args.temperature)
 
-    print("Reading and processing PDF...")
-    pdf_text = generator.read_pdf(args.pdf_path)
+    # Check if the cleaned text file exists, else process and save it
+    cleaned_text_path = "cleaned_text.txt"
+    if os.path.exists(cleaned_text_path):
+        with open(cleaned_text_path, "r") as file:
+            cleaned_text = file.read()
+        print(f"Loaded cleaned text from {cleaned_text_path}.")
+    else:
+        print("Cleaning text...")
+        pdf_text = generator.read_pdf(args.pdf_path)  # Ensure PDF is read if not already loaded
+        cleaned_text = generator.clean_text(pdf_text, SYS_PROMPT_CLEANING, save_path=cleaned_text_path)
 
-    print("Cleaning text...")
-    cleaned_text = generator.clean_text(pdf_text, SYS_PROMPT_CLEANING)
+    # Check if the podcast script file exists, else generate and save it
+    podcast_script_path = "podcast_script.txt"
+    if os.path.exists(podcast_script_path):
+        with open(podcast_script_path, "r") as file:
+            podcast_script = file.read()
+        print(f"Loaded podcast script from {podcast_script_path}.")
+    else:
+        print("Generating podcast script...")
+        podcast_script = generator.generate_script(cleaned_text, SYS_PROMPT_PODCAST, save_path=podcast_script_path)
 
-    print("Generating podcast script...")
-    podcast_script = generator.generate_script(cleaned_text, SYS_PROMPT_PODCAST)
+    # Check if the rewritten podcast script file exists, else generate and save it
+    rewritten_script_path = "rewritten_script.txt"
+    if os.path.exists(rewritten_script_path):
+        with open(rewritten_script_path, "r") as file:
+            rewritten_script = file.read()
+        print(f"Loaded rewritten script from {rewritten_script_path}.")
+    else:
+        print("Rewriting podcast script...")
+        rewritten_script = generator.generate_script(podcast_script, SYSTEM_PROMPT_REWRITE, save_path=rewritten_script_path)
+    
+    clear_gpu_memory()
+    print("Generating TTS audio with Bark...")
+    generate_audio_with_bark(rewritten_script, save_path=args.pdf_path)
 
-    print("Rewriting podcast script...")
-    rewritten_script = generator.generate_script(podcast_script, SYSTEM_PROMPT_REWRITE)
 
-    print("Setting up Parler TTS model...")
-    model, tokenizer = setup_parler_tts()
-
-    print("Generating TTS audio with streaming...")
-    chunk_size_in_s = 10  # Adjust as needed for optimal streaming performance
-    generate_with_streaming(rewritten_script, "Will is speaking.", model, tokenizer, chunk_size_in_s, args.pdf_path)
+def clear_gpu_memory():
+    """Clears unused GPU memory"""
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        print("GPU memory cleared.")
+    else:
+        print("CUDA is not available. No memory cleared.")
 
 if __name__ == "__main__":
     main()

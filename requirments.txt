@@ -9,6 +9,7 @@ tqdm>=4.66.0
 pdfplumber
 # Optional but recommended
 jupyter>=1.0.0
+bark
 ipykernel>=6.0.0
 pydub
 scipy
