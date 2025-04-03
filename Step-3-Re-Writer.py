@@ -54,6 +54,7 @@ def load_input(input_path: str):
         return pickle.load(file)
 
 def save_output(output_path: str, data):
+    print(data)
     with open(output_path, 'wb') as file:
         pickle.dump(data, file)
 

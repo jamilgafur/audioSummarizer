@@ -1,169 +1,153 @@
-from IPython.display import Audio
-import IPython.display as ipd
-from tqdm import tqdm
-
-from transformers import BarkModel, AutoProcessor, AutoTokenizer
+import argparse
 import torch
-import json
+import pickle
+import warnings
+import io
 import numpy as np
+from tqdm import tqdm
+from transformers import pipeline, AutoProcessor, AutoTokenizer
+
+from transformers import AutoProcessor, AutoTokenizer, BarkModel
 from parler_tts import ParlerTTSForConditionalGeneration
+from pydub import AudioSegment
+from scipy.io import wavfile
+import os
+
+warnings.filterwarnings('ignore')
 
 # Set up device
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# Load model and tokenizer
-model = ParlerTTSForConditionalGeneration.from_pretrained("parler-tts/parler-tts-mini-v1").to(device)
-tokenizer = AutoTokenizer.from_pretrained("parler-tts/parler-tts-mini-v1")
+# Define system prompt for generating the podcast
+SYSTEM_PROMPT = """
+You are an experienced and engaging podcast host. Your job is to deliver insightful, informative, and captivating content to listeners. 
 
-# Define text and description
-text_prompt = """
-Exactly! And the distillation part is where you take a LARGE-model,and compress-it down into a smaller, more efficient model that can run on devices with limited resources.
-"""
-description = """
-Laura's voice is expressive and dramatic in delivery, speaking at a fast pace with a very close recording that almost has no background noise.
-"""
-# Tokenize inputs
-input_ids = tokenizer(description, return_tensors="pt").input_ids.to(device)
-prompt_input_ids = tokenizer(text_prompt, return_tensors="pt").input_ids.to(device)
+The podcast will feature you, the sole speaker. Your tone should be confident, yet approachable, using clear and concise explanations, while also offering interesting anecdotes and analogies to make the content accessible and engaging.
 
-# Generate audio
-generation = model.generate(input_ids=input_ids, prompt_input_ids=prompt_input_ids)
-audio_arr = generation.cpu().numpy().squeeze()
+You are talking directly to the audience, guiding them through the concepts, and making sure to keep the conversation lively. The style is informative, educational, and exciting. Ensure that the content flows smoothly and keeps the listener intrigued. Add enthusiasm to your delivery to make the technical details more engaging.
 
-# Play audio in notebook
-ipd.Audio(audio_arr, rate=model.config.sampling_rate)
+START YOUR RESPONSE DIRECTLY WITH THE SCRIPT:
 
-voice_preset = "v2/en_speaker_6"
-sampling_rate = 24000
+Welcome Everybody...
 
-device = "cuda:7"
-
-processor = AutoProcessor.from_pretrained("suno/bark")
-
-model = BarkModel.from_pretrained("suno/bark", torch_dtype=torch.float16).to(device)#.to_bettertransformer()
-
-text_prompt = """
-Exactly! [sigh] And the distillation part is where you take a LARGE-model,and compress-it down into a smaller, more efficient model that can run on devices with limited resources.
-"""
-inputs = processor(text_prompt, voice_preset=voice_preset).to(device)
-
-speech_output = model.generate(**inputs, temperature = 0.9, semantic_temperature = 0.8)
-Audio(speech_output[0].cpu().numpy(), rate=sampling_rate)
-
-import pickle
-
-with open('./resources/podcast_ready_data.pkl', 'rb') as file:
-    PODCAST_TEXT = pickle.load(file)
-
-bark_processor = AutoProcessor.from_pretrained("suno/bark")
-bark_model = BarkModel.from_pretrained("suno/bark", torch_dtype=torch.float16).to("cuda:3")
-bark_sampling_rate = 24000
-
-parler_model = ParlerTTSForConditionalGeneration.from_pretrained("parler-tts/parler-tts-mini-v1").to("cuda:3")
-parler_tokenizer = AutoTokenizer.from_pretrained("parler-tts/parler-tts-mini-v1")
-
-speaker1_description = """
-Laura's voice is expressive and dramatic in delivery, speaking at a moderately fast pace with a very close recording that almost has no background noise.
 """
 
-generated_segments = []
-sampling_rates = []  # We'll need to keep track of sampling rates for each segment
+# Function to load the input pickle file
+def load_input(input_path: str):
+    with open(input_path, 'rb') as file:
+        return pickle.load(file)
 
-device="cuda:3"
+# Function to save the output to a pickle file
+def save_output(output_path: str, data):
+    with open(output_path, 'wb') as file:
+        pickle.dump(data, file)
 
-def generate_speaker1_audio(text):
-    """Generate audio using ParlerTTS for Speaker 1"""
-    input_ids = parler_tokenizer(speaker1_description, return_tensors="pt").input_ids.to(device)
+# Function to generate podcast content
+def generate_podcast(model_name: str, input_prompt, max_new_tokens: int = 8126, temperature: float = 1.0):
+    pipe = pipeline("text-generation", model=model_name, model_kwargs={"torch_dtype": torch.bfloat16}, device_map="auto")
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": input_prompt}]
+    outputs = pipe(messages, max_new_tokens=max_new_tokens, temperature=temperature)
+    return outputs[0]["generated_text"][-1]['content']
+
+# Load TTS models and processors
+def setup_models(use_parler=True):
+    if use_parler:
+        # Load Parler TTS model and tokenizer
+        parler_model = ParlerTTSForConditionalGeneration.from_pretrained("parler-tts/parler-tts-mini-v1").to(device)
+        parler_tokenizer = AutoTokenizer.from_pretrained("parler-tts/parler-tts-mini-v1")
+        return parler_model, parler_tokenizer, None, None  # Returning None for Bark-specific values
+    else:
+        # Load Bark model and processor
+        bark_processor = AutoProcessor.from_pretrained("suno/bark")
+        bark_model = BarkModel.from_pretrained("suno/bark", torch_dtype=torch.float16).to(device)
+        return None, None, bark_model, bark_processor
+
+# Generate audio for a single speaker (Parler TTS)
+def generate_audio_parler(parler_model, parler_tokenizer, text, description="Laura's voice description"):
+    input_ids = parler_tokenizer(description, return_tensors="pt").input_ids.to(device)
     prompt_input_ids = parler_tokenizer(text, return_tensors="pt").input_ids.to(device)
     generation = parler_model.generate(input_ids=input_ids, prompt_input_ids=prompt_input_ids)
     audio_arr = generation.cpu().numpy().squeeze()
     return audio_arr, parler_model.config.sampling_rate
 
-def generate_speaker2_audio(text):
-    """Generate audio using Bark for Speaker 2"""
-    inputs = bark_processor(text, voice_preset="v2/en_speaker_6").to(device)
+# Generate audio for a single speaker (Bark TTS)
+def generate_audio_bark(bark_model, bark_processor, text, voice_preset="v2/en_speaker_6"):
+    inputs = bark_processor(text, voice_preset=voice_preset).to(device)
     speech_output = bark_model.generate(**inputs, temperature=0.9, semantic_temperature=0.8)
     audio_arr = speech_output[0].cpu().numpy()
-    return audio_arr, bark_sampling_rate
+    return audio_arr, 24000  # Bark sampling rate is fixed at 24000
 
+# Convert numpy array to AudioSegment
 def numpy_to_audio_segment(audio_arr, sampling_rate):
-    """Convert numpy array to AudioSegment"""
-    # Convert to 16-bit PCM
     audio_int16 = (audio_arr * 32767).astype(np.int16)
-    
-    # Create WAV file in memory
     byte_io = io.BytesIO()
     wavfile.write(byte_io, sampling_rate, audio_int16)
     byte_io.seek(0)
-    
-    # Convert to AudioSegment
     return AudioSegment.from_wav(byte_io)
 
+# Save each audio segment to a file for validation
+def save_audio_segment(audio_segment, index, output_dir):
+    filename = os.path.join(output_dir, f"segment_{index}.wav")
+    audio_segment.export(filename, format="wav")
 
-# In[16]:
+# Main function for podcast generation
+def generate_podcast_audio(podcast_data, use_parler=True, output_dir="generated_audio"):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
+    final_audio = None
+    parler_model, parler_tokenizer, bark_model, bark_processor = setup_models(use_parler)
 
-PODCAST_TEXT
+    for index, text in tqdm(enumerate(podcast_data), desc="Generating podcast segments", unit="segment"):
+        if use_parler:
+            audio_arr, rate = generate_audio_parler(parler_model, parler_tokenizer, text)
+        else:
+            audio_arr, rate = generate_audio_bark(bark_model, bark_processor, text)
 
+        audio_segment = numpy_to_audio_segment(audio_arr, rate)
+        
+        # Save each segment for validation
+        save_audio_segment(audio_segment, index, output_dir)
 
-# Most of the times we argue in life that Data Structures isn't very useful. However, this time the knowledge comes in handy. 
-# 
-# We will take the string from the pickle file and load it in as a Tuple with the help of `ast.literal_eval()`
+        # Combine the audio segments
+        if final_audio is None:
+            final_audio = audio_segment
+        else:
+            final_audio += audio_segment
 
-# In[18]:
+    return final_audio
 
+# Save final audio as an MP3
+def save_podcast_audio(final_audio, output_path="./resources/_single_speaker_podcast.mp3"):
+    final_audio.export(output_path, format="mp3", bitrate="192k", parameters=["-q:a", "0"])
 
-import ast
-ast.literal_eval(PODCAST_TEXT)
+# Main execution logic
+def main():
+    parser = argparse.ArgumentParser(description="Reformat podcast script using HuggingFace models")
+    parser.add_argument('--input', type=str, default='./resources/data.pkl', help='Path to the input pickle file')
+    parser.add_argument('--output', type=str, default='./resources/podcast_ready_data.pkl', help='Path to save the podcast-ready output')
+    parser.add_argument('--model', type=str, default='deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B', help='HuggingFace model to use')
+    parser.add_argument('--max_tokens', type=int, default=8126, help='Maximum number of tokens to generate')
+    parser.add_argument('--temperature', type=float, default=1.0, help='Sampling temperature')
+    parser.add_argument('--use_parler', action='store_true', help='Use Parler TTS model instead of Bark')
 
+    args = parser.parse_args()
 
-# #### Generating the Final Podcast
-# 
-# Finally, we can loop over the Tuple and use our helper functions to generate the audio
+    print(f"Loading input from: {args.input}")
+    input_prompt = load_input(args.input)
 
-# In[39]:
+    print("Generating podcast content...")
+    generated_text = generate_podcast(model_name=args.model, input_prompt=input_prompt, max_new_tokens=args.max_tokens, temperature=args.temperature)
 
+    print("Generating final podcast...")
+    podcast_data = generated_text.split('\n')  # Assuming each line is a podcast segment
+    final_audio = generate_podcast_audio(podcast_data, use_parler=args.use_parler)
 
-final_audio = None
+    print(f"Saving output to: {args.output}")
+    save_podcast_audio(final_audio)
+    save_output(args.output, podcast_data)
 
-for speaker, text in tqdm(ast.literal_eval(PODCAST_TEXT), desc="Generating podcast segments", unit="segment"):
-    if speaker == "Speaker 1":
-        audio_arr, rate = generate_speaker1_audio(text)
-    else:  # Speaker 2
-        audio_arr, rate = generate_speaker2_audio(text)
-    
-    # Convert to AudioSegment (pydub will handle sample rate conversion automatically)
-    audio_segment = numpy_to_audio_segment(audio_arr, rate)
-    
-    # Add to final audio
-    if final_audio is None:
-        final_audio = audio_segment
-    else:
-        final_audio += audio_segment
+    print("Done!")
 
-
-# ### Output the Podcast
-# 
-# We can now save this as a mp3 file
-
-# In[40]:
-
-
-final_audio.export("./resources/_podcast.mp3", 
-                  format="mp3", 
-                  bitrate="192k",
-                  parameters=["-q:a", "0"])
-
-
-# ### Suggested Next Steps:
-# 
-# - Experiment with the prompts: Please feel free to experiment with the SYSTEM_PROMPT in the notebooks
-# - Extend workflow beyond two speakers
-# - Test other TTS Models
-# - Experiment with Speech Enhancer models as a step 5.
-
-# In[ ]:
-
-
-#fin
-
+if __name__ == "__main__":
+    main()
