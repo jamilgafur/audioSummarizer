@@ -1,23 +1,10 @@
-#!/usr/bin/env python
-# coding: utf-8
+import argparse
+import torch
+import pickle
+import warnings
+from transformers import pipeline
 
-# ## Notebook 3: Transcript Re-writer
-# 
-# In the previous notebook, we got a great podcast transcript using the raw file we have uploaded earlier. 
-# 
-# In this one, we will use `Llama-3.1-8B-Instruct` model to re-write the output from previous pipeline and make it more dramatic or realistic.
-
-# We will again set the `SYSTEM_PROMPT` and remind the model of its task. 
-# 
-# Note: We can even prompt the model like so to encourage creativity:
-# 
-# > Your job is to use the podcast transcript written below to re-write it for an AI Text-To-Speech Pipeline. A very dumb AI had written this so you have to step up for your kind.
-# 
-
-# Note: We will prompt the model to return a list of Tuples to make our life easy in the next stage of using these for Text To Speech Generation
-
-# In[1]:
-
+warnings.filterwarnings('ignore')
 
 SYSTEM_PROMPT = """
 You are an international oscar winnning screenwriter
@@ -62,97 +49,64 @@ Example of response:
 ]
 """
 
+def load_input(input_path: str):
+    with open(input_path, 'rb') as file:
+        return pickle.load(file)
 
-# This time we will use the smaller 8B model
+def save_output(output_path: str, data):
+    with open(output_path, 'wb') as file:
+        pickle.dump(data, file)
 
-# In[2]:
+def generate_podcast(
+    model_name: str,
+    input_prompt,
+    max_new_tokens: int = 8126,
+    temperature: float = 1.0
+):
+    pipe = pipeline(
+        "text-generation",
+        model=model_name,
+        model_kwargs={"torch_dtype": torch.bfloat16},
+        device_map="auto",
+    )
 
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": input_prompt},
+    ]
 
-MODEL = "meta-llama/Llama-3.1-8B-Instruct"
+    outputs = pipe(
+        messages,
+        max_new_tokens=max_new_tokens,
+        temperature=temperature,
+    )
 
+    return outputs[0]["generated_text"][-1]['content']
 
-# Let's import the necessary libraries
+def main():
+    parser = argparse.ArgumentParser(description="Reformat podcast script using HuggingFace models")
+    parser.add_argument('--input', type=str, default='./resources/data.pkl', help='Path to the input pickle file')
+    parser.add_argument('--output', type=str, default='./resources/podcast_ready_data.pkl', help='Path to save the podcast-ready output')
+    parser.add_argument('--model', type=str, default='deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B', help='HuggingFace model to use')
+    parser.add_argument('--max_tokens', type=int, default=8126, help='Maximum number of tokens to generate')
+    parser.add_argument('--temperature', type=float, default=1.0, help='Sampling temperature')
 
-# In[3]:
+    args = parser.parse_args()
 
+    print(f"Loading input from: {args.input}")
+    input_prompt = load_input(args.input)
 
-# Import necessary libraries
-import torch
-from accelerate import Accelerator
-import transformers
+    print("Generating podcast content...")
+    generated_text = generate_podcast(
+        model_name=args.model,
+        input_prompt=input_prompt,
+        max_new_tokens=args.max_tokens,
+        temperature=args.temperature
+    )
 
-from tqdm.notebook import tqdm
-import warnings
+    print(f"Saving output to: {args.output}")
+    save_output(args.output, generated_text)
+    print("Done!")
 
-warnings.filterwarnings('ignore')
-
-
-# We will load in the pickle file saved from previous notebook
-# 
-# This time the `INPUT_PROMPT` to the model will be the output from the previous stage
-
-# In[4]:
-
-
-import pickle
-
-with open('./resources/data.pkl', 'rb') as file:
-    INPUT_PROMPT = pickle.load(file)
-
-
-# We can again use Hugging Face `pipeline` method to generate text from the model
-
-# In[ ]:
-
-
-pipeline = transformers.pipeline(
-    "text-generation",
-    model=MODEL,
-    model_kwargs={"torch_dtype": torch.bfloat16},
-    device_map="auto",
-)
-
-messages = [
-    {"role": "system", "content": SYSTEM_PROMPT},
-    {"role": "user", "content": INPUT_PROMPT},
-]
-
-outputs = pipeline(
-    messages,
-    max_new_tokens=8126,
-    temperature=1,
-)
-
-
-# We can verify the output from the model
-
-# In[ ]:
-
-
-print(outputs[0]["generated_text"][-1])
-
-
-# In[ ]:
-
-
-save_string_pkl = outputs[0]["generated_text"][-1]['content']
-
-
-# Let's save the output as a pickle file to be used in Notebook 4
-
-# In[ ]:
-
-
-with open('./resources/podcast_ready_data.pkl', 'wb') as file:
-    pickle.dump(save_string_pkl, file)
-
-
-# ### Next Notebook: TTS Workflow
-# 
-# Now that we have our transcript ready, we are ready to generate the audio in the next notebook.
-
-# In[ ]:
-
-
-#fin
-
+if __name__ == "__main__":
+    main()
