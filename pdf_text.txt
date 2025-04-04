@@ -1,13 +1,3 @@
-You are a world class text pre-processor, here is the raw data from a PDF, please parse and return it in a way that is crispy and usable to send to a podcast writer.
-The raw data is messed up with new lines, Latex math and you will see fluff that we can remove completely. Basically take away any details that you think might be useless in a podcast author's transcript.
-Remember, the podcast could be on any topic whatsoever so the issues listed above are not exhaustive
-Please be smart with what you remove and be creative ok?
-Remember DO NOT START SUMMARIZING THIS, YOU ARE ONLY CLEANING UP THE TEXT AND RE-WRITING WHEN NEEDED
-Be very smart and aggressive with removing details, you will get a running portion of the text and keep returning the processed text.
-PLEASE DO NOT ADD MARKDOWN FORMATTING, STOP ADDING SPECIAL CHARACTERS THAT MARKDOWN CAPATILISATION ETC LIKES
-ALWAYS start your response directly with processed text and NO ACKNOWLEDGEMENTS about my questions ok?
-Here is the text:
-
 1
 A Survey on Knowledge Distillation of Large
 Language Models
@@ -1386,17 +1376,4 @@ harm, making the responses of LLMs more aligned with encedatasets(Jietal.,2023b;
 Human preferences. Kwon et al. (2023) develop a proxy Baietal.,2022b;Qiuetal.,2022;Kieseletal.,2022;Liuetal.,
 rewardfunctionusingLLMslikeGPT-3,whichiscreatedby 2022a), utilizing human-written rules as constrains (Glaese
 firstprovidingtheLLMwithadescriptionofthebehaviors et al., 2022; Sun et al., 2023b, 2024b), etc. For detailed
-desiredbytheuser,alongwithasmallnumberofexamples. progress on trustworthy LLMs, 2024b. The authors have addressed the issue that small LLMs are often not adequately tailored to the nuances of the user’s intent.
-The problem of aligning LLMs to human preferences is addressed in several ways: through the use of forced preference mechanisms (Kwon et al., 2023a) or via the introduction of a secondary LLM to generate
-refinanced preferences (Li et al., 2024d), but the latter approach is not suitable for very large systems where multiple LLMs need to collaborate.
-
-Moreover, the authors propose using a combination of prompt-based retrieval and LLMs to improve the quality of responses. For instance, in the case of the teacher asking a series of questions that the teacher wants the AI to answer based on their student's preferences (Zhang et al., 2023b), the AI is given a list of possible responses. The AI then selects an initial prompt that matches the teacher's intent. This method is particularly useful in educational settings (Budelbauer and Gao, 2024b), where teachers and students often prefer human-centered instruction.
-
-Another angle is the development of multiple teacher prompting strategies that can tailor LLM responses to align with the teacher’s preferences. For example, when a teacher wants to evaluate how well their students are understanding a certain concept, the teacher can provide specific questions or prompts that guide the AI to think in ways that better align with the student’s preferences.
-
-Finally, the authors discuss the problem of overfitting in small models, such as GPT-4, which can produce responses that don't align with human preferences, and propose methods to mitigate this. One such method is to use large models like BPT and their ability to generate more nuanced responses that better align with human preferences. This includes techniques like context unfolding, parameter tying, and model compression (Zhang et al., 2023). These methods help to ensure that the LLMs do not produce responses that are too rigid or diverse, but instead produce responses that align more closely with human preferences, thus improving the alignment between students and teachers.
-</think>
-
-[Insert summary of the key points about the research on training LLMs to be aligned with human preferences.](insert key points here)
-
-1. **Introduction to the Research**: The study aims to address the challenge of training large language models (LLMs) to produce responses that are not only accurate but also align with the preferences and wishes of
+desiredbytheuser,alongwithasmallnumberofexamples. progress on trustworthy LLMs, 
