@@ -1,59 +1,98 @@
-# Podcast TTS Workflow
-
-This repository implements an end-to-end pipeline for converting PDF documents into a podcast-ready audio file. The solution strictly follows the provided design: each processing stage is handled by a dedicated Python script, using Hugging Face Transformers for text generation and Parler TTS for audio synthesis. This workflow is designed to work with specific input formats and configuration parameters as detailed below.
+Here is the README for the `audioSummarizer` repository based on the provided code structure:
 
 ---
+
+# Audio Summarizer
+
+The **Audio Summarizer** package converts PDF text into a podcast-ready audio format. This package extracts text from PDF files, processes the content using language models, and generates high-quality, engaging audio using Text-to-Speech (TTS) models.
+
+## Features
+
+- **PDF Text Extraction**: Extracts text from PDF files using the `pdfplumber` library.
+- **Text Cleaning and Processing**: Cleans and processes extracted text to make it more suitable for podcast narration.
+- **Podcast Script Generation**: Uses Hugging Face and Ollama models to rewrite the extracted text into a conversational podcast script.
+- **Audio Generation**: Converts the podcast script into audio using the SpeechT5 TTS model.
 
 ## Table of Contents
 
-- [Overview](#overview)
+- [Installation](#installation)
+- [Usage](#usage)
 - [Directory Structure](#directory-structure)
-- [Requirements](#requirements)
-- [Detailed Workflow](#detailed-workflow)
-  - [Step 1: PDF Pre-Processing](#step-1-pdf-pre-processing)
-  - [Step 2: Transcript Writer](#step-2-transcript-writer)
-  - [Step 3: Re-Writer (Single Speaker Monologue)](#step-3-re-writer-single-speaker-monologue)
-  - [Step 4: TTS Workflow](#step-4-tts-workflow)
-- [Code Citation](#code-citation)
+- [Dependencies](#dependencies)
 - [License](#license)
 
----
+## Installation
 
-## Overview
+To use the **Audio Summarizer** package, ensure you have Python 3.7+ and pip installed. Then, install the required dependencies:
 
-The pipeline converts PDF content into an audio podcast through four major stages:
+```bash
+pip install -r requirements.txt
+```
 
-1. **PDF Pre-Processing:**  
-   - Validates the input PDF.
-   - Extracts text using `pdfplumber` and cleans encoding issues.
-   - Splits the extracted text into manageable chunks (controlled by a maximum character limit).
-   - Processes each chunk with a Transformer model to produce cleaned and formatted text.
+## Usage
 
-2. **Transcript Writer:**  
-   - Reads the cleaned text output from Step 1.
-   - Uses a text-generation pipeline with a detailed system prompt to generate a podcast transcript.
-   - The transcript is designed to be engaging and mimics a realistic, flowing conversation as per the provided instructions.
+To generate an audio podcast from a PDF document, run the following command:
 
-3. **Re-Writer (Single Speaker Monologue):**  
-   - Transforms the initial transcript into a cohesive, single-speaker monologue.
-   - The system prompt instructs the model to remove any dialogue markers or multiple speaker labels, ensuring a continuous narrative.
-   - This transformation is critical for generating a final script that is compatible with AI Text-To-Speech (TTS) pipelines.
+```bash
+python completed.py <pdf_path> [options]
+```
 
-4. **TTS Workflow:**  
-   - Converts the monologue transcript into audio using Parler TTS.
-   - Generates individual audio segments for each part of the transcript.
-   - Combines these segments into the final podcast audio output.
-   - The process strictly follows the provided instructions without adding extra formatting or markers.
+### Arguments
 
----
+- `pdf_path`: The path to the PDF file you want to convert to audio.
+- `--modelOllama`: Specify the Ollama model to use for text processing (default: `llama3.2`).
+- `--modelHugging`: Specify the Hugging Face model for text generation (default: `facebook/opt-125m`).
+- `--max_tokens`: Set the maximum number of tokens for the generation (default: `8126`).
+- `--temperature`: Set the sampling temperature for text generation (default: `1.0`).
+- `--pdf_text_file`: The filename to save extracted PDF text (default: `pdf_text.txt`).
+- `--cleaned_text_file`: The filename to save cleaned text (default: `cleaned.txt`).
+- `--audiomodelname`: The TTS model to use for generating the audio (default: `suno/bark-small`).
+
+### Example
+
+```bash
+python completed.py my_document.pdf --modelOllama llama3.2 --modelHugging facebook/opt-125m --audiomodelname suno/bark-small
+```
+
+This will process the PDF `my_document.pdf`, clean and rewrite the text, and generate audio output in the `output_audio` directory.
 
 ## Directory Structure
 
-The repository is organized into four main Python scripts, each corresponding to a step in the workflow:
-
 ```plaintext
-└── ./
-    ├── Step-1 PDF-Pre-Processing-Logic.py
-    ├── Step-2-Transcript-Writer.py
-    ├── Step-3-Re-Writer.py
-    └── Step-4-TTS-Workflow.py
+./
+├── AudioGenerator.py      # Handles audio generation using TTS models
+├── completed.py           # Main script for PDF processing and audio generation
+├── FileManager.py         # Manages file reading, cleaning, and GPU memory management
+└── QueryHandler.py        # Handles text processing, chunking, and interaction with Hugging Face and Ollama models
+```
+
+### Detailed Workflow
+
+1. **PDF Pre-Processing**: Extract text from the PDF using the `FileManager.read_pdf` method.
+2. **Text Cleaning and Script Generation**: The `TextProcessor.clean_text` method cleans the extracted text and generates a conversational podcast script using Hugging Face and Ollama models.
+3. **Audio Generation**: The `AudioGenerator.generate_audio_from_text` method splits the text into chunks and generates audio using the SpeechT5 TTS model.
+
+## Dependencies
+
+- `torch`: Required for deep learning models and TTS pipeline.
+- `transformers`: Hugging Face library for using pre-trained models.
+- `datasets`: Hugging Face dataset library for loading speaker embeddings.
+- `soundfile`: For saving the generated audio to files.
+- `pydub`: Used for audio manipulation (if necessary).
+- `pdfplumber`: Used to extract text from PDF files.
+
+### Install Dependencies
+
+You can install the dependencies with the following command:
+
+```bash
+pip install -r requirements.txt
+```
+
+## License
+
+This repository is licensed under the MIT License. See the `LICENSE` file for more details.
+
+---
+
+Feel free to customize the README further if needed!
