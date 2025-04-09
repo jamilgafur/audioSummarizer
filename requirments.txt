@@ -17,3 +17,9 @@ huggingface_hub[cli]
 huggingface_hub
 pydantic
 ollama
+
+# Additional dependencies for audio generation
+datasets>=2.0.0
+soundfile>=0.10.0
+kokoro>=0.9.4
+soundfile
