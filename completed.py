@@ -37,13 +37,10 @@ def main():
    
     # Generate podcast script
     podcast_script = text_processor.generate_script(pdf_text, chunks=10)
-
     file_manager.clear_gpu_memory()
-
     audiogen = AudioGenerator()
     filename = os.path.splitext(os.path.basename(args.pdf_path))[0]
-    for i, chunk in enumerate(podcast_script):
-        audiogen.generate_audio_from_text(chunk, output_file=f"{filename}_eps{i}.wav")
+    audiogen.generate_audio_from_text(' '.join(podcast_script), output_file=f"{filename}.wav")
     # Clear GPU memory
     file_manager.clear_gpu_memory()
 

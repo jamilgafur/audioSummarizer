@@ -1,0 +1,69 @@
+
+
+Episode 0: "UNBELIEVABLE AI Breakthrough: New Method to Train LARGER Models!" 
+This is a comprehensive survey on knowledge distillation of large language models (LLMs). Here's an overview of the main topics covered:
+
+**Introduction**
+
+The survey introduces the concept of knowledge distillation, which involves transferring knowledge from one model to another to improve the performance of a smaller model.
+
+**Knowledge Elicitation**
+
+The survey discusses various methods for eliciting knowledge from a teacher model, including:
+
+1. Supervised fine-tuning
+2. Context following alignment
+3. Agent law (e.g., using demonstrations and rewards)
+4. NLP task specialization
+
+These methods aim to extract relevant information from the teacher model that can be used to improve the student model.
+
+**Distillation Algorithm**
+
+The survey explains various distillation algorithms, including:
+
+1. Knowledge distillation
+2. Self-knowledge
+3. Rank optimization
+4. Labeling expansion
+5. Data curation
+
+These algorithms aim to transfer knowledge from the teacher model to the student model while minimizing the loss of information.
+
+**Applications and Vertical Domains**
+
+The survey explores various applications and vertical domains where knowledge distillation can be applied, including:
+
+1. NLP task specialization
+2. Multi-modality (e.g., text and images)
+3. Finance
+4. Science
+5. Skill domain divergence and similarity
+
+**Knowledge Distillation Strategies**
+
+The survey discusses various strategies for knowledge distillation, including:
+
+1. Using open-source LLMs as teachers for self-improvement
+2. Employing open-source LLMs as teachers to improve proprietary models
+3. Using demonstrations and rewards to guide the student model
+
+These strategies aim to enhance the capabilities of open-source LLMs while making them more accessible and cost-effective.
+
+**Challenges and Gaps**
+
+The survey identifies various challenges and gaps in knowledge distillation research, including:
+
+1. Current methodologies
+2. Challenges in §6 (e.g., data availability, computational requirements)
+3. Opportunities for future work
+
+**Conclusion and Future Work**
+
+The survey concludes by synthesizing the insights gained from the literature review and identifying opportunities for future research. It proposes directions for future work, including:
+
+1. Developing more efficient and effective knowledge distillation algorithms
+2. Investigating the use of open-source LLMs as teachers for self-improvement
+3. Exploring applications in various vertical domains
+
+Overall, this survey provides a comprehensive overview of knowledge distillation in large language models, highlighting its potential and challenges. It serves as a guide for researchers and practitioners to explore new methodologies and strategies for improving the capabilities of open-source LLMs.

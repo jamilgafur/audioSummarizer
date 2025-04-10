@@ -1,0 +1,12 @@
+
+
+Episode 8: "EXPOSED: The SHOCKING Truth About Evolution's Hidden Round Four" 
+The text discusses various research efforts in the field of instruction-following language models. Here are some key points:
+
+1. **Evolving Instructions**: Researchers have proposed several methods to evolve instructions, such as using OpenAI ChatGPT data (Xuet et al., 2023b), distilling multi-turn knowledge from teacher LLMs (Chiang et al., 2023), and generating adaptive retrieval capabilities from teacher LLMs (Asai et al., 2023).
+2. **Multi-Turn Dialogues**: Some research focuses on expanding conversational datasets through self-chat and using them to train smaller models (Xuet et al., 2023b; Ding et al., 2023b). For example, Xuet et al. (2023b) collect 111.5k dialogues from Quora and StackOverflow as seeds, resulting in the creation of a larger dataset called UltraChat.
+3. **Self-Chat and Reranking**: Ye et al. (2023) enhance the quality of multi-turn data from ShareGPT by generating self-feedback on model responses and iteratively refining the responses based on received feedback.
+4. **Rag Capabilities**: Asai et al. (2023) distill adaptive Rag capabilities from teacher LLMs into a small critic model, which determines whether retrieval is necessary and evaluates the quality of retrieved results.
+5. **Fine-Tuning and Reranking**: Researchers have also explored fine-tuning student models using search-augmented instructions and Reranker (Wang et al., 2023c). The Reranker is trained to mimic how a retriever scores passages with rationales, with the goal of generating high-quality responses.
+
+Overall, these research efforts aim to improve the multi-turn capabilities of instruction-following language models, including their ability to engage in conversations and generate accurate responses.
