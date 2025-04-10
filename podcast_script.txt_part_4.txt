@@ -1,0 +1,46 @@
+
+
+=== I'd be delighted to help with writing teleprompt scripts for you.
+
+What kind of content do you need the script for? Is it:
+
+* A speech or presentation?
+* An interview or Q&A session?
+* A video commercial or promo?
+* A corporate event or awards ceremony?
+
+Please provide me with some details, and I'll get started on crafting a compelling teleprompt script that will engage your audience.
+
+Also, would you like the script to be:
+
+* Formal and professional
+* Informal and conversational
+* Short and snappy
+* Long and detailed
+
+Let me know, and I'll tailor the script to fit your needs! ===
+I can provide a summary of the text in a format that is easier to read and understand.
+
+**Knowledge Elicitation from Teacher LLMs**
+
+Teacher LLMs (Large Language Models) are being used as teachers to elicit knowledge from students. This process involves using the teacher's capabilities to generate outputs for a given input, and then refining these outputs through various methods to improve their quality.
+
+**Methods for Knowledge Elicitation**
+
+There are several methods for knowledge elicitation, including:
+
+1. **Labeling**: The teacher generates an output from the input.
+2. **Expansion**: The teacher generates samples similar to the given demonstrations through in-context learning.
+3. **Data Curation**: The teacher synthesizes data according to meta-information, such as a topic or an entity.
+4. **Feature**: The data is fed into the teacher and extracted features are generated.
+5. **Feedback**: The teacher provides feedback on the student's generations, such as preferences, corrections, expansions of challenging samples, etc.
+6. **Self-Knowledge**: The student first generates outputs, which are then filtered for high quality or evaluated by the student itself.
+
+**Formulation**
+
+The knowledge elicitation process can be formulated as follows:
+
+* Labeling: D(lab) = {(x, y) | x ∼ X, y ∼ pT(y|I ⊕ c ⊕ x)}
+* Expansion: D(exp) = {(x, y) | x ∼ pT(x|I ⊕ c), y ∼ pT(y|I ⊕ x)}
+
+These formulations highlight the use of teacher LLMs to generate new input-output pairs that are similar to the original demonstrations.

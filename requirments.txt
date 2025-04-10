@@ -11,8 +11,10 @@ pdfplumber
 jupyter>=1.0.0
 ipykernel>=6.0.0
 pydub
+soundfile 
 scipy
 parler_tts
+huggingface_hub[hf_xet]
 huggingface_hub[cli]
 huggingface_hub
 pydantic

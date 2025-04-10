@@ -5,7 +5,6 @@ from ollama import chat
 from typing import Optional
 import os
 
-
 class TextProcessor:
     def __init__(self, huggingface_model_name: str, ollama_model_name: str, temperature: float = 1.0, device: Optional[str] = None):
         print(f"Initializing TextProcessor with HuggingFace model: {huggingface_model_name} and Ollama model: {ollama_model_name}")
@@ -63,26 +62,57 @@ class TextProcessor:
         text = re.sub(r'\[.*?\]', '', text)
         return text
 
-    def generate_script(self, input_text: str, sys_prompt: str = """Update and summarize the provided text into a concise, clear, and well-structured report. The tone should be professional, yet approachable, suitable for a single speaker presenting the information. Break down longer sentences into shorter, clearer ones, aiming for clarity and smooth flow of ideas. Each sentence should be around 50 words to maintain a steady pace when read aloud. Ensure the information is presented logically, with appropriate transitions between topics. Make the report easy to follow, with emphasis on key points, and avoid overly complex or technical jargon unless necessary. Keep the language formal and polished, suitable for a professional presentation. Do not include any references to the original source text.""", save_path: Optional[str] = "podcast_script.txt", chunks: int = 20) -> str:
+    def generate_script(
+        self, 
+        input_text: str, 
+        sys_prompt: Optional[str] = """You are a professional teleprompt scriptwriter with experience explaining complex topics in a simple, engaging, and clear manner. Your task is to transform the following text into a teleprompter script suitable for a high school audience. Focus on:
+
+1. **Simplifying the content**: Break down complex concepts into easy-to-understand language without losing the essence of the information.
+2. **Clear and concise sentences**: Break up long paragraphs and sentences into shorter, digestible parts.
+3. **Engaging tone**: Write in a conversational, friendly manner that keeps the audience interested, but maintain a professional, informative style.
+4. **Logical structure**: Organize the content logically with a smooth flow of ideas that would make sense to a high schooler. Use bullet points or numbered lists where appropriate for clarity.
+5. **Avoid meta commentary**: Do not add any commentary or explanations about the original text. Just focus on creating the script for a teleprompter presentation.
+
+Use this text to create the script:""", 
+        save_path: Optional[str] = "podcast_script.txt", 
+        chunks: int = 20
+    ) -> str:
+     
         paragraphs = [p for p in input_text.strip().split('\n') if p.strip()]
         if len(paragraphs) > 2:
             input_text = '\n'.join(paragraphs[1:-1])
 
-        parts = [input_text[i:i + len(input_text) // chunks] for i in range(0, len(input_text), len(input_text) // chunks)]
-        final_output = ""
+        # Divide input text into nearly equal parts.
+        part_length = len(input_text) // chunks
+        parts = [input_text[i:i + part_length] for i in range(0, len(input_text), part_length)]
+        final_output = []
 
         for i, part in enumerate(parts):
             if part.strip():
-                title_prompt = f"Give a short, engaging title for this episode based on the following content: {part[:400]}"
-                title_response = chat(messages=[{'role': 'user', 'content': title_prompt}], model=self.ollama_model_name)
+                # Generate a title for the episode.
+                title_prompt = f"you are a professional teleprompt script writer. "
+                title_response = chat(
+                    messages=[{'role': 'user', 'content': title_prompt}], 
+                    model=self.ollama_model_name
+                )
                 title = title_response['message']['content'].strip()
-                response = chat(messages=[{'role': 'system', 'content': sys_prompt}, {'role': 'user', 'content': part}], model=self.ollama_model_name)
+                
+                # Generate the script with the updated prompt.
+                response = chat(
+                    messages=[
+                        {'role': 'system', 'content': sys_prompt}, 
+                        {'role': 'user', 'content': part}
+                    ],
+                    model=self.ollama_model_name
+                )
                 script = response['message']['content']
-                final_output += f"\n\n=== {title} ===\n{script}\n"
+                final_output.append(f"\n\n=== {title} ===\n{script}\n")
                 print(f"\n[Episode {i + 1}: {title}]\n{script}\n")
 
         if save_path:
-            with open(save_path, 'w') as file:
-                file.write(final_output)
+            for i, text in enumerate(final_output):
+                with open(f"{save_path}_part_{i + 1}.txt", 'w') as f:
+                    f.write(text)
+                    print(f"Saved: {save_path}_part_{i + 1}.txt")
 
         return final_output

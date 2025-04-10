@@ -1,63 +1,52 @@
 import os
 import nltk
-from nltk.tokenize import sent_tokenize
+import soundfile as sf
 from pydub import AudioSegment
-from kokoro import KPipeline
 from nltk.tokenize import sent_tokenize
-import os
+from kokoro import KPipeline
 
 nltk.download('punkt')
 
 class AudioGenerator:
-    def __init__(self):
-        # Initialize Kokoro pipeline
-        self.pipeline = KPipeline(lang_code='a')  # Set to English (adjust as needed)
+    def __init__(self, voice='af_heart'):
+        self.pipeline = KPipeline(lang_code='a')
+        self.voice = voice
 
-    def generate_audio_from_text(self, text, save_path="output_audio", merged_output_file="final_podcast.wav", chunk_size=10):
-        # Tokenize into sentences
+    def generate_audio_from_text(
+        self,
+        text,
+        output_file="final_output.wav",
+        save_path="output_audio",
+        silence_duration_ms=300
+    ):
+        # Tokenize the entire text into sentences
         sentences = sent_tokenize(text)
-
-        # Create the output directory if it doesn't exist
         os.makedirs(save_path, exist_ok=True)
 
-        # Remove first and last sentences for context trimming
-        if len(sentences) > 2:
-            sentences = sentences[1:-1]
+        final_audio = AudioSegment.empty()
 
-        # Determine number of sentences per chunk
-        total_sentences = len(sentences)
-        sentences_per_chunk = max(1, total_sentences // chunk_size)
+        for i, sentence in enumerate(sentences):
+            sentence = sentence.strip()
+            if not sentence or len(sentence.split()) < 3:
+                print(f"Skipping sentence {i+1}: too short or empty.")
+                continue
 
-        chunk_list = [
-            " ".join(sentences[i:i + sentences_per_chunk])
-            for i in range(0, total_sentences, sentences_per_chunk)
-        ]
+            try:
+                generator = self.pipeline(sentence, voice=self.voice)
+                for _, _, audio in generator:
+                    temp_path = os.path.join(save_path, "temp.wav")
+                    sf.write(temp_path, audio.numpy(), 24000)
+                    segment = AudioSegment.from_wav(temp_path)
+                    final_audio += segment + AudioSegment.silent(duration=silence_duration_ms)
+                    print(f"Processed sentence {i+1}")
+                    break
+            except Exception as e:
+                print(f"Error on sentence {i+1}: {e}")
 
-        # Limit to exactly `chunk_size` chunks (in case of rounding mismatch)
-        chunk_list = chunk_list[:chunk_size]
+        if len(final_audio) > 0:
+            final_path = os.path.join(save_path, output_file)
+            final_audio.export(final_path, format="wav")
+            print(f"Final audio saved as: {final_path}")
+        else:
+            print("No audio was generated.")
 
-        # Generate audio chunks
-        for idx, chunk in enumerate(chunk_list):
-            if chunk.strip():
-                self.generate_audio_chunk(chunk, idx + 1, save_path)
-
-        # Merge the chunks into a single file
-        self.merge_audio_chunks(save_path, merged_output_file)
-
-    def generate_audio_chunk(self, text, index, save_path):
-        """Generates a single audio file from a text chunk."""
-        wav_data = self.pipeline.tts(text)
-        out_path = os.path.join(save_path, f"chunk_{index}.wav")
-        with open(out_path, "wb") as f:
-            f.write(wav_data)
-        print(f"Saved: {out_path}")
-
-    def merge_audio_chunks(self, chunk_folder, output_file="final_podcast.wav"):
-        """Merges all audio chunks in a folder into a single podcast file."""
-        audio_files = sorted([f for f in os.listdir(chunk_folder) if f.endswith(".wav")])
-        combined = AudioSegment.empty()
-        for f in audio_files:
-            audio = AudioSegment.from_wav(os.path.join(chunk_folder, f))
-            combined += audio + AudioSegment.silent(duration=250)  # Add short pause
-        combined.export(output_file, format="wav")
-        print(f"Merged audio saved as: {output_file}")

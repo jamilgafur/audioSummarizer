@@ -34,18 +34,16 @@ def main():
             file.write(pdf_text)
         print(f"Extracted PDF text saved to {args.pdf_text_file}")
 
-    if os.path.exists("podcast_script.txt"):
-        print(f"Loading existing podcast script from podcast_script.txt")
-        with open("podcast_script.txt", 'r') as file:
-            podcast_script = file.read()
-    else:
-        # Generate podcast script
-        podcast_script = text_processor.generate_script(pdf_text)
+   
+    # Generate podcast script
+    podcast_script = text_processor.generate_script(pdf_text, chunks=10)
 
     file_manager.clear_gpu_memory()
 
     audiogen = AudioGenerator()
-    audiogen.generate_audio_from_text(podcast_script)
+    filename = os.path.splitext(os.path.basename(args.pdf_path))[0]
+    for i, chunk in enumerate(podcast_script):
+        audiogen.generate_audio_from_text(chunk, output_file=f"{filename}_eps{i}.wav")
     # Clear GPU memory
     file_manager.clear_gpu_memory()
 
